@@ -129,17 +129,17 @@ window.App = window.App || {};
       words.forEach((w, index) => {
         const delayClass = `stagger-${(index % 4) + 1}`;
         container.append(`
-          <div class="bg-white rounded-2xl p-5 border border-slate-100 hover-card-lift animate-slide-up ${delayClass}">
-            <div class="flex justify-between items-start mb-4">
+          <div class="bg-white rounded-2xl p-4 sm:p-5 border border-slate-100 hover-card-lift animate-slide-up ${delayClass}">
+            <div class="flex justify-between items-start gap-3 mb-4">
               <div>
-                <h3 class="text-xl font-bold text-slate-800">${App.Utils.escapeHtml(w.term)}</h3>
+                <h3 class="text-lg sm:text-xl font-bold text-slate-800 break-words">${App.Utils.escapeHtml(w.term)}</h3>
                 <p class="text-emerald-600 font-medium">${App.Utils.escapeHtml(w.translation)}</p>
               </div>
               <button onclick="App.UI.deleteWord('${w.id}')" class="text-slate-300 hover:text-red-500 transition-colors p-1" title="Delete">
                 ${App.Icons.trash}
               </button>
             </div>
-            ${w.context ? `<p class="text-sm text-slate-500 italic mb-4 bg-slate-50 p-2 rounded-lg">"${App.Utils.escapeHtml(w.context)}"</p>` : ''}
+            ${w.context ? `<p class="text-sm text-slate-500 italic mb-4 bg-slate-50 p-2 rounded-lg break-words">\"${App.Utils.escapeHtml(w.context)}\"</p>` : ''}
             <div class="flex justify-between items-center mt-auto pt-4 border-t border-slate-50">
               <div class="flex space-x-1" title="Mastery Level">
                 ${this.renderMasteryDots(w.level)}
@@ -243,11 +243,11 @@ window.App = window.App || {};
       const toReview = App.Data.getWordsToReview();
       
       let html = `
-        <div class="max-w-2xl mx-auto mt-12 text-center animate-slide-up">
+        <div class="max-w-2xl mx-auto mt-8 sm:mt-12 text-center animate-slide-up px-2">
           <div class="w-24 h-24 bg-orange-100 text-orange-500 rounded-full flex items-center justify-center mx-auto mb-6 shadow-inner">
             <svg class="w-12 h-12" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
           </div>
-          <h2 class="text-3xl font-bold text-slate-800 mb-4">Ready to Practice?</h2>
+          <h2 class="text-2xl sm:text-3xl font-bold text-slate-800 mb-4">Ready to Practice?</h2>
       `;
 
       if (toReview.length === 0) {
@@ -260,7 +260,7 @@ window.App = window.App || {};
       } else {
         html += `
           <p class="text-slate-500 text-lg mb-8">You have <span class="font-bold text-orange-500">${toReview.length}</span> words scheduled for review today based on spaced repetition.</p>
-          <button onclick="App.UI.startPracticeSession(false)" class="bg-orange-500 text-white px-8 py-4 rounded-2xl font-bold text-lg hover:bg-orange-600 hover:shadow-lg transition-all transform hover:-translate-y-1">
+          <button onclick="App.UI.startPracticeSession(false)" class="w-full sm:w-auto bg-orange-500 text-white px-6 sm:px-8 py-4 rounded-2xl font-bold text-base sm:text-lg hover:bg-orange-600 hover:shadow-lg transition-all transform hover:-translate-y-1">
             Start Review Session
           </button>
         `;
@@ -293,10 +293,10 @@ window.App = window.App || {};
       const progress = ((this.practiceCurrentIndex) / this.practiceQueue.length) * 100;
 
       container.html(`
-        <div class="max-w-xl mx-auto animate-fade-in">
-          <div class="flex items-center justify-between mb-8">
+        <div class="max-w-xl mx-auto animate-fade-in px-1 sm:px-0">
+          <div class="flex flex-wrap items-center justify-between gap-3 mb-6 sm:mb-8">
             <button onclick="App.UI.endPracticeSession(false)" class="text-slate-400 hover:text-slate-700 font-medium px-3 py-1 bg-white rounded-lg border border-slate-200">Quit</button>
-            <div class="flex-1 mx-6">
+            <div class="order-3 sm:order-2 basis-full sm:basis-auto flex-1 sm:mx-6">
               <div class="h-2 bg-slate-200 rounded-full overflow-hidden">
                 <div class="h-full bg-orange-500 transition-all duration-500" style="width: ${progress}%"></div>
               </div>
@@ -304,24 +304,24 @@ window.App = window.App || {};
             <span class="text-slate-500 font-medium">${this.practiceCurrentIndex + 1} / ${this.practiceQueue.length}</span>
           </div>
 
-          <div class="perspective-1000 mb-8" id="flashcard-container">
-            <div id="flashcard-inner" class="relative w-full h-80 transform-style-3d cursor-pointer" onclick="App.UI.flipCard()">
+          <div class="perspective-1000 mb-6 sm:mb-8" id="flashcard-container">
+            <div id="flashcard-inner" class="relative w-full min-h-[18rem] h-[18rem] sm:h-80 transform-style-3d cursor-pointer" onclick="App.UI.flipCard()">
               <!-- Front -->
               <div class="absolute w-full h-full backface-hidden bg-white border-2 border-slate-100 rounded-3xl shadow-sm flex flex-col items-center justify-center p-8">
                 <span class="text-sm font-bold text-slate-300 uppercase tracking-widest mb-4">${word.lang}</span>
-                <h2 class="text-5xl font-bold text-slate-800 text-center">${App.Utils.escapeHtml(word.term)}</h2>
+                <h2 class="text-3xl sm:text-5xl font-bold text-slate-800 text-center break-words">${App.Utils.escapeHtml(word.term)}</h2>
                 <p class="mt-8 text-slate-400 text-sm">Tap to reveal translation</p>
               </div>
               
               <!-- Back -->
               <div class="absolute w-full h-full backface-hidden bg-emerald-600 rounded-3xl shadow-lg flex flex-col items-center justify-center p-8 rotate-y-180">
-                <h2 class="text-4xl font-bold text-white text-center mb-6">${App.Utils.escapeHtml(word.translation)}</h2>
+                <h2 class="text-3xl sm:text-4xl font-bold text-white text-center mb-6 break-words">${App.Utils.escapeHtml(word.translation)}</h2>
                 ${word.context ? `<p class="text-emerald-100 text-center italic">"${App.Utils.escapeHtml(word.context)}"</p>` : ''}
               </div>
             </div>
           </div>
 
-          <div id="practice-controls" class="flex space-x-4 opacity-0 transition-opacity duration-300 pointer-events-none">
+          <div id="practice-controls" class="flex flex-col sm:flex-row gap-3 sm:gap-4 opacity-0 transition-opacity duration-300 pointer-events-none">
             <button onclick="App.UI.answerCard(false)" class="flex-1 bg-white border-2 border-red-200 text-red-600 font-bold py-4 rounded-2xl hover:bg-red-50 hover:border-red-300 transition-colors">
               Hard / Incorrect
             </button>
@@ -369,11 +369,11 @@ window.App = window.App || {};
       const accuracy = Math.round((correctCount / this.practiceResults.length) * 100);
 
       container.html(`
-        <div class="max-w-md mx-auto mt-12 text-center animate-slide-up bg-white p-10 rounded-3xl shadow-sm border border-slate-100">
+        <div class="max-w-md mx-auto mt-8 sm:mt-12 text-center animate-slide-up bg-white p-6 sm:p-10 rounded-3xl shadow-sm border border-slate-100">
           <div class="w-20 h-20 bg-emerald-100 text-emerald-500 rounded-full flex items-center justify-center mx-auto mb-6">
             <svg class="w-10 h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"></path></svg>
           </div>
-          <h2 class="text-3xl font-bold text-slate-800 mb-2">Great Session!</h2>
+          <h2 class="text-2xl sm:text-3xl font-bold text-slate-800 mb-2">Great Session!</h2>
           <p class="text-slate-500 mb-8">You reviewed ${this.practiceResults.length} words.</p>
           
           <div class="grid grid-cols-2 gap-4 mb-8">
@@ -407,9 +407,9 @@ window.App = window.App || {};
       });
 
       container.html(`
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-6 animate-slide-up">
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6 animate-slide-up">
           <!-- Streak Card -->
-          <div class="bg-gradient-to-br from-orange-500 to-red-500 rounded-3xl p-8 text-white shadow-lg relative overflow-hidden">
+          <div class="bg-gradient-to-br from-orange-500 to-red-500 rounded-3xl p-6 sm:p-8 text-white shadow-lg relative overflow-hidden">
             <div class="relative z-10">
               <div class="flex items-center space-x-3 mb-8">
                 <div class="bg-white/20 p-2 rounded-xl backdrop-blur-sm">
@@ -418,7 +418,7 @@ window.App = window.App || {};
                 <h3 class="text-xl font-bold">Current Streak</h3>
               </div>
               <div class="flex items-end space-x-2">
-                <span class="text-6xl font-black">${streak.current}</span>
+                <span class="text-5xl sm:text-6xl font-black">${streak.current}</span>
                 <span class="text-xl font-medium mb-1 opacity-80">days</span>
               </div>
               <p class="mt-4 text-orange-100 font-medium">Longest streak: ${streak.longest} days</p>
@@ -429,7 +429,7 @@ window.App = window.App || {};
           </div>
 
           <!-- Stats Card -->
-          <div class="bg-white rounded-3xl p-8 border border-slate-100 shadow-sm">
+          <div class="bg-white rounded-3xl p-6 sm:p-8 border border-slate-100 shadow-sm">
             <h3 class="text-xl font-bold text-slate-800 mb-6">Overall Progress</h3>
             <div class="space-y-6">
               <div>
@@ -454,13 +454,13 @@ window.App = window.App || {};
           </div>
 
           <!-- Heatmap Card -->
-          <div class="col-span-1 md:col-span-2 bg-white rounded-3xl p-8 border border-slate-100 shadow-sm">
+          <div class="col-span-1 md:col-span-2 bg-white rounded-3xl p-5 sm:p-8 border border-slate-100 shadow-sm">
             <h3 class="text-xl font-bold text-slate-800 mb-2">Activity Heatmap</h3>
             <p class="text-slate-500 text-sm mb-6">Your practice history over the last 60 days</p>
-            <div class="flex flex-wrap gap-1.5 justify-start">
+            <div class="flex flex-wrap gap-1.5 justify-start overflow-x-auto pb-1">
               ${heatmapHtml}
             </div>
-            <div class="flex items-center justify-end space-x-2 mt-4 text-xs text-slate-400 font-medium">
+            <div class="flex flex-wrap items-center justify-end gap-2 mt-4 text-xs text-slate-400 font-medium">
               <span>Less</span>
               <div class="w-3 h-3 rounded-sm bg-[#e2e8f0]"></div>
               <div class="w-3 h-3 rounded-sm bg-[#a7f3d0]"></div>

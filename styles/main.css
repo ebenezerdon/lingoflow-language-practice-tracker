@@ -154,3 +154,27 @@ body {
   -webkit-backdrop-filter: blur(12px);
   border: 1px solid rgba(255, 255, 255, 0.5);
 }
+
+
+@media (max-width: 640px) {
+  .toast-container {
+    left: 12px;
+    right: 12px;
+    bottom: 12px;
+  }
+
+  .toast-msg {
+    min-width: 0;
+    width: 100%;
+    padding: 14px 16px;
+  }
+
+  .heatmap-cell {
+    width: 12px;
+    height: 12px;
+  }
+
+  #flashcard-inner {
+    min-height: 18rem;
+  }
+}
