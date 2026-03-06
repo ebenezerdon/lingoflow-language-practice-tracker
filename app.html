@@ -107,6 +107,44 @@
             <!-- Populated via JS -->
           </div>
         </div>
+
+        <div class="bg-white rounded-3xl border border-slate-100 shadow-sm p-5 sm:p-6 lg:p-8">
+          <div class="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-5 mb-5">
+            <div>
+              <h2 class="text-xl font-bold text-slate-800">AI Study Coach</h2>
+              <p class="text-slate-500 mt-1">Ask for quick explanations, mnemonics, or practice ideas powered locally in your browser.</p>
+            </div>
+            <div id="ai-status-badge" class="inline-flex items-center rounded-full bg-slate-100 px-3 py-1 text-xs font-bold uppercase tracking-wider text-slate-500 self-start">
+              Initializing AI...
+            </div>
+          </div>
+
+          <div id="dashboard-ai-error" class="hidden mb-4 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700"></div>
+
+          <div id="dashboard-ai-progress" class="mb-5">
+            <div class="flex items-center justify-between text-xs text-slate-500 mb-2">
+              <span>Downloading local AI model</span>
+              <span id="dashboard-ai-progress-text">0%</span>
+            </div>
+            <div class="h-2 rounded-full bg-slate-100 overflow-hidden">
+              <div id="dashboard-ai-progress-bar" class="h-full bg-emerald-500 transition-all duration-300" style="width: 0%"></div>
+            </div>
+          </div>
+
+          <div class="flex flex-col sm:flex-row gap-3 mb-3">
+            <input id="dashboard-ai-input" type="text" class="input-field flex-1" placeholder="e.g. Give me a mnemonic for desarrollo" disabled>
+            <div class="flex gap-3">
+              <button id="dashboard-ai-send" class="flex-1 sm:flex-none bg-emerald-600 text-white px-5 py-3 rounded-xl font-semibold hover:bg-emerald-700 transition-colors disabled:bg-slate-300 disabled:cursor-not-allowed" disabled>
+                Ask AI
+              </button>
+              <button id="dashboard-ai-stop" class="flex-1 sm:flex-none bg-slate-100 text-slate-700 px-5 py-3 rounded-xl font-semibold hover:bg-slate-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed" disabled>
+                Stop
+              </button>
+            </div>
+          </div>
+
+          <div id="dashboard-ai-output" class="min-h-[120px] rounded-2xl border border-slate-100 bg-slate-50 p-4 text-sm leading-7 text-slate-700 whitespace-pre-wrap">Your local AI coach will be ready shortly.</div>
+        </div>
       </div>
 
       <!-- Vocabulary View -->
@@ -123,57 +161,63 @@
       </div>
 
       <!-- Practice View -->
-      <div id="view-practice" class="view-section hidden w-full h-full flex flex-col">
-          <!-- Dynamic logic renders lobby or flashcards here -->
-      </div>
+      <div id="view-practice" class="view-section hidden max-w-5xl mx-auto"></div>
 
       <!-- Insights View -->
-      <div id="view-insights" class="view-section hidden max-w-5xl mx-auto space-y-6 sm:space-y-8">
-          <!-- Populated via JS -->
-      </div>
-
+      <div id="view-insights" class="view-section hidden max-w-5xl mx-auto"></div>
     </div>
   </main>
 
   <!-- Add Word Modal -->
-  <div id="modal-overlay" class="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-50 hidden items-end sm:items-center justify-center p-3 sm:p-4">
+  <div id="modal-overlay" class="fixed inset-0 z-50 hidden items-end sm:items-center justify-center bg-slate-900/50 p-0 sm:p-4">
     <div class="bg-white rounded-t-3xl sm:rounded-3xl shadow-2xl w-full max-w-md max-h-[90vh] overflow-y-auto transform transition-all">
       <div class="px-5 sm:px-8 py-5 sm:py-6 border-b border-slate-100 flex justify-between items-center">
         <h3 id="modal-title" class="text-xl font-bold text-slate-800">Add New Word</h3>
-        <button id="btn-close-modal" class="text-slate-400 hover:text-slate-600 transition-colors p-2">
+        <button id="btn-close-modal" type="button" class="text-slate-400 hover:text-slate-600 transition-colors p-2" aria-label="Close add word modal">
           <svg class="w-5 h-5 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
         </button>
       </div>
       
       <form id="form-add-word" class="p-5 sm:p-8 space-y-5 sm:space-y-6">
         <div>
-          <label class="block text-sm font-bold text-slate-700 mb-2 uppercase tracking-wider">Target Word</label>
-          <input type="text" id="word-term" class="input-field font-medium text-lg" placeholder="e.g. Desarollo" autocomplete="off" required>
+          <label for="word-term" class="block text-sm font-bold text-slate-700 uppercase tracking-wider mb-2">Target Word</label>
+          <input type="text" id="word-term" class="input-field font-medium text-lg" placeholder="e.g. Desarrollo" autocomplete="off" required>
         </div>
         
         <div>
-          <label class="block text-sm font-bold text-slate-700 mb-2 uppercase tracking-wider">Translation</label>
+          <label for="word-translation" class="block text-sm font-bold text-slate-700 uppercase tracking-wider mb-2">Translation</label>
           <input type="text" id="word-translation" class="input-field font-medium text-lg" placeholder="e.g. Development" autocomplete="off" required>
         </div>
 
         <div>
           <div class="flex flex-col sm:flex-row sm:justify-between sm:items-end gap-2 mb-2">
-            <label class="block text-sm font-bold text-slate-700 uppercase tracking-wider">Context / Example</label>
-            <button type="button" id="btn-ai-context" class="w-full sm:w-auto text-xs font-bold text-emerald-600 bg-emerald-50 px-3 py-2 rounded hover:bg-emerald-100 transition-colors flex items-center justify-center">
-              <svg class="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z"/></svg>
-              Auto-Generate
+            <label for="word-context" class="block text-sm font-bold text-slate-700 uppercase tracking-wider">Context / Example</label>
+            <button type="button" id="btn-ai-stop" class="w-full sm:w-auto text-xs font-bold text-slate-700 bg-slate-100 px-3 py-2 rounded hover:bg-slate-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed" disabled>
+              Stop
             </button>
           </div>
           <textarea id="word-context" class="input-field min-h-[80px] text-slate-600" placeholder="An example sentence using the word..."></textarea>
           
-          <!-- AI Progress -->
           <div id="ai-progress-container" class="mt-3 hidden">
             <div class="flex justify-between text-xs text-slate-500 mb-1">
               <span>Downloading local AI model (first time only)</span>
+              <span id="ai-progress-text">0%</span>
             </div>
             <div class="h-1.5 bg-slate-100 rounded-full overflow-hidden">
               <div id="ai-progress-bar" class="h-full bg-emerald-500 transition-all duration-300" style="width: 0%"></div>
             </div>
+          </div>
+        </div>
+
+        <div class="rounded-2xl border border-emerald-100 bg-emerald-50/70 p-4">
+          <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+            <div>
+              <h4 class="text-sm font-bold uppercase tracking-wider text-slate-700">Discover with AI</h4>
+              <p class="text-sm text-slate-500 mt-1">Click Generate to discover a new word and fill target word, translation, and context all at once.</p>
+            </div>
+            <button type="button" id="btn-ai-generate-all" class="w-full sm:w-auto bg-emerald-600 text-white px-4 py-2.5 rounded-xl text-sm font-semibold hover:bg-emerald-700 transition-colors disabled:bg-slate-300 disabled:cursor-not-allowed" disabled>
+              Generate
+            </button>
           </div>
         </div>
 
@@ -184,6 +228,7 @@
     </div>
   </div>
 
+  <!-- Scripts -->
   <!-- Scripts -->
   <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
   <script src="scripts/helpers.js"></script>

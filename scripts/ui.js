@@ -9,29 +9,200 @@ window.App = window.App || {};
     practiceQueue: [],
     practiceCurrentIndex: 0,
     practiceResults: [],
+    aiStateKey: 'lingoflow.ai.state.v1',
+    aiState: {
+      modelId: localStorage.getItem('app.llm.model') || 'Qwen2.5-1.5B-Instruct-q4f16_1-MLC',
+      history: []
+    },
+    aiLoadingStarted: false,
+    aiGeneratingDashboard: false,
+    aiGeneratingContext: false,
+    aiGeneratingField: null,
+    aiProgressUnsubscribe: null,
 
     init: function() {
-      // Bind Navigation
+      this.loadAiState();
+
+      if (window.AppLLM && typeof window.AppLLM.onProgress === 'function') {
+        this.aiProgressUnsubscribe = window.AppLLM.onProgress((percent) => {
+          this.showAiProgress(percent > 0 ? percent : 1);
+          if (percent >= 100 && window.AppLLM.ready) {
+            this.hideAiProgress();
+          }
+        });
+      }
+
       $('.nav-item').on('click', function(e) {
         e.preventDefault();
         const view = $(this).data('view');
-        if(view) App.UI.switchView(view);
+        if (view) App.UI.switchView(view);
       });
 
-      // Bind Global Actions
       $('#btn-add-word').on('click', () => this.showAddWordModal());
       $('#modal-overlay, #btn-close-modal').on('click', (e) => {
         if (e.target === e.currentTarget) this.closeModal();
       });
 
-      // Bind Form Submit
       $('#form-add-word').on('submit', (e) => {
         e.preventDefault();
         this.handleSaveWord();
       });
 
-      // Bind AI context generator
       $('#btn-ai-context').on('click', () => this.generateAiContext());
+      $('#btn-ai-generate-all').on('click', () => this.generateAiAllFields());
+      $('#btn-ai-stop').on('click', () => {
+        if (window.AppLLM) window.AppLLM.stop();
+        this.aiGeneratingContext = false;
+        this.aiGeneratingField = null;
+        this.updateAiControls();
+        this.setGeneratingButtonState('all', false);
+      });
+
+      $('#dashboard-ai-send').on('click', () => this.sendDashboardAiPrompt());
+      $('#dashboard-ai-stop').on('click', () => {
+        if (window.AppLLM) window.AppLLM.stop();
+        this.aiGeneratingDashboard = false;
+        this.updateAiControls();
+      });
+      $('#dashboard-ai-input').on('keydown', (e) => {
+        if (e.key === 'Enter' && !e.shiftKey) {
+          e.preventDefault();
+          this.sendDashboardAiPrompt();
+        }
+      });
+
+      this.updateAiControls();
+      this.ensureAiLoaded();
+    },
+
+    loadAiState: function() {
+      try {
+        const stored = localStorage.getItem(this.aiStateKey);
+        if (stored) {
+          const parsed = JSON.parse(stored);
+          this.aiState = {
+            modelId: parsed.modelId || this.aiState.modelId,
+            history: Array.isArray(parsed.history) ? parsed.history : []
+          };
+        }
+      } catch (e) {
+        console.error('Failed to load AI state', e);
+      }
+    },
+
+    saveAiState: function() {
+      this.aiState.modelId = window.AppLLM && window.AppLLM.modelId ? window.AppLLM.modelId : this.aiState.modelId;
+      localStorage.setItem(this.aiStateKey, JSON.stringify(this.aiState));
+    },
+
+    ensureAiLoaded: async function() {
+      if (!window.AppLLM) {
+        this.setAiStatus('AI unavailable', 'error');
+        this.showAiError('AI module failed to load.');
+        this.updateAiControls();
+        return;
+      }
+
+      if (window.AppLLM.ready) {
+        this.showAiProgress(100);
+        this.hideAiProgress();
+        this.setAiStatus('AI ready', 'ready');
+        this.updateAiControls();
+        return;
+      }
+
+      if (this.aiLoadingStarted) {
+        this.showAiProgress(typeof window.AppLLM._lastProgress === 'number' && window.AppLLM._lastProgress > 0 ? window.AppLLM._lastProgress : 1);
+        this.updateAiControls();
+        return;
+      }
+
+      this.aiLoadingStarted = true;
+      this.setAiStatus('Initializing AI...', 'loading');
+      this.showAiProgress(typeof window.AppLLM._lastProgress === 'number' && window.AppLLM._lastProgress > 0 ? window.AppLLM._lastProgress : 1);
+      this.updateAiControls();
+
+      try {
+        await window.AppLLM.load(null, (percent) => {
+          this.showAiProgress(percent > 0 ? percent : 1);
+        });
+        this.aiState.modelId = window.AppLLM.modelId;
+        this.saveAiState();
+        this.setAiStatus('AI ready', 'ready');
+        this.showAiProgress(100);
+        setTimeout(() => {
+          if (window.AppLLM && window.AppLLM.ready) this.hideAiProgress();
+        }, 600);
+      } catch (e) {
+        console.error(e);
+        this.setAiStatus('AI unavailable', 'error');
+        this.showAiError(e.message);
+      } finally {
+        this.updateAiControls();
+        this.renderDashboardAiOutput();
+      }
+    },
+
+    setAiStatus: function(text, state) {
+      const badge = $('#ai-status-badge');
+      if (!badge.length) return;
+      badge.removeClass('bg-slate-100 text-slate-500 bg-emerald-100 text-emerald-700 bg-red-100 text-red-700');
+      if (state === 'ready') badge.addClass('bg-emerald-100 text-emerald-700');
+      else if (state === 'error') badge.addClass('bg-red-100 text-red-700');
+      else badge.addClass('bg-slate-100 text-slate-500');
+      badge.text(text);
+    },
+
+    showAiProgress: function(percent) {
+      const safePercent = Math.max(0, Math.min(100, Number(percent) || 0));
+      $('#ai-progress-container, #dashboard-ai-progress').removeClass('hidden');
+      $('#ai-progress-bar, #dashboard-ai-progress-bar').css('width', safePercent + '%');
+      $('#ai-progress-text, #dashboard-ai-progress-text').text(safePercent + '%');
+    },
+
+    hideAiProgress: function() {
+      $('#ai-progress-container, #dashboard-ai-progress').addClass('hidden');
+    },
+
+    showAiError: function(message) {
+      const safe = App.Utils.escapeHtml(message || 'Unknown AI error');
+      $('#dashboard-ai-error').removeClass('hidden').html(safe);
+      App.Toast.show('AI Error: ' + (message || 'Unknown AI error'), 'error');
+    },
+
+    clearAiError: function() {
+      $('#dashboard-ai-error').addClass('hidden').empty();
+    },
+
+    updateAiControls: function() {
+      const ready = !!(window.AppLLM && window.AppLLM.ready);
+      const isGenerating = !!this.aiGeneratingContext;
+      $('#btn-ai-context').prop('disabled', !ready || isGenerating);
+      $('#btn-ai-stop').prop('disabled', !isGenerating);
+      $('[data-ai-fill]').prop('disabled', !ready || isGenerating);
+      $('#btn-ai-generate-all').prop('disabled', !ready || isGenerating);
+      $('#dashboard-ai-input').prop('disabled', !ready || this.aiGeneratingDashboard);
+      $('#dashboard-ai-send').prop('disabled', !ready || this.aiGeneratingDashboard);
+      $('#dashboard-ai-stop').prop('disabled', !this.aiGeneratingDashboard);
+    },
+
+    getWordFormValues: function() {
+      return {
+        term: ($('#word-term').val() || '').trim(),
+        translation: ($('#word-translation').val() || '').trim(),
+        context: ($('#word-context').val() || '').trim(),
+        lang: App.Data && App.Data.state && App.Data.state.settings ? App.Data.state.settings.targetLanguage : 'Spanish'
+      };
+    },
+    setGeneratingButtonState: function(field, active) {
+      var button = field === 'all' ? $('#btn-ai-generate-all') : $('#btn-ai-context');
+      if (!button.length) return;
+      if (!button.data('original-text')) button.data('original-text', button.html());
+      if (active) {
+        button.html('<svg class="animate-spin h-4 w-4 mr-2 inline" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" fill="none"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg> Generating...');
+      } else {
+        button.html(button.data('original-text'));
+      }
     },
 
     switchView: function(viewId) {
@@ -41,27 +212,32 @@ window.App = window.App || {};
       }
 
       $('.nav-item').removeClass('bg-emerald-50 text-emerald-600').addClass('text-slate-600 hover:bg-slate-50');
-      $(`.nav-item[data-view="${viewId}"]`).addClass('bg-emerald-50 text-emerald-600').removeClass('text-slate-600 hover:bg-slate-50');
+      $('.nav-item[data-view="' + viewId + '"]').addClass('bg-emerald-50 text-emerald-600').removeClass('text-slate-600 hover:bg-slate-50');
 
       $('.view-section').addClass('hidden').removeClass('animate-fade-in');
-      $(`#view-${viewId}`).removeClass('hidden').addClass('animate-fade-in');
-      
+      $('#view-' + viewId).removeClass('hidden').addClass('animate-fade-in');
+
       this.currentView = viewId;
       this.renderCurrentView();
     },
 
     renderCurrentView: function() {
-      switch(this.currentView) {
-        case 'dashboard': this.renderDashboard(); break;
-        case 'vocabulary': this.renderVocabulary(); break;
-        case 'insights': this.renderInsights(); break;
-        case 'practice': 
-          if (!this.isPracticing) this.renderPracticeLobby(); 
+      switch (this.currentView) {
+        case 'dashboard':
+          this.renderDashboard();
+          break;
+        case 'vocabulary':
+          this.renderVocabulary();
+          break;
+        case 'insights':
+          this.renderInsights();
+          break;
+        case 'practice':
+          if (!this.isPracticing) this.renderPracticeLobby();
           break;
       }
     },
 
-    // --- Dashboard View ---
     renderDashboard: function() {
       const words = App.Data.getWords();
       const reviewCount = App.Data.getWordsToReview().length;
@@ -73,38 +249,104 @@ window.App = window.App || {};
 
       const recentContainer = $('#dash-recent-words');
       recentContainer.empty();
-      
+
       const recent = words.slice(0, 5);
       if (recent.length === 0) {
-        recentContainer.html(`<div class="text-center text-slate-400 py-6">No words added yet.</div>`);
+        recentContainer.html('<div class="text-center text-slate-400 py-6">No words added yet.</div>');
       } else {
-        recent.forEach(w => {
+        recent.forEach((w) => {
           recentContainer.append(`
-            <div class="flex justify-between items-center py-3 border-b border-slate-100 last:border-0">
-              <div>
-                <span class="font-medium text-slate-800">${App.Utils.escapeHtml(w.term)}</span>
+            <div class="flex justify-between items-center py-3 border-b border-slate-100 last:border-0 gap-3">
+              <div class="min-w-0">
+                <span class="font-medium text-slate-800 break-words">${App.Utils.escapeHtml(w.term)}</span>
                 <span class="text-slate-400 mx-2">→</span>
-                <span class="text-slate-600">${App.Utils.escapeHtml(w.translation)}</span>
+                <span class="text-slate-600 break-words">${App.Utils.escapeHtml(w.translation)}</span>
               </div>
-              <div class="flex space-x-1">
+              <div class="flex space-x-1 flex-shrink-0">
                 ${this.renderMasteryDots(w.level)}
               </div>
             </div>
           `);
         });
       }
+
+      this.renderDashboardAiOutput();
+      this.updateAiControls();
+      if (window.AppLLM && window.AppLLM.ready) {
+        this.setAiStatus('AI ready', 'ready');
+        this.hideAiProgress();
+      }
+    },
+
+    renderDashboardAiOutput: function() {
+      const output = $('#dashboard-ai-output');
+      if (!output.length) return;
+
+      const history = this.aiState.history || [];
+      if (!history.length) {
+        output.text(window.AppLLM && window.AppLLM.ready ? 'Try asking for a mnemonic, example dialogue, or a mini quiz based on your vocabulary.' : 'Your local AI coach will be ready shortly.');
+        return;
+      }
+
+      const lastItems = history.slice(-4);
+      const html = lastItems.map((item) => {
+        const cls = item.role === 'user' ? 'bg-slate-200 text-slate-700' : 'bg-emerald-50 text-slate-800 border border-emerald-100';
+        const label = item.role === 'user' ? 'You' : 'AI Coach';
+        return `<div class="mb-3 last:mb-0 rounded-2xl px-4 py-3 ${cls}"><div class="text-[11px] font-bold uppercase tracking-wider mb-1 opacity-70">${label}</div><div class="whitespace-pre-wrap">${App.Utils.escapeHtml(item.content)}</div></div>`;
+      }).join('');
+
+      output.html(html);
+    },
+
+    sendDashboardAiPrompt: async function() {
+      const input = $('#dashboard-ai-input');
+      const text = (input.val() || '').trim();
+      if (!text) return;
+      if (!window.AppLLM || !window.AppLLM.ready) {
+        App.Toast.show('AI is still loading. Please wait a moment.', 'error');
+        return;
+      }
+
+      this.clearAiError();
+      this.aiGeneratingDashboard = true;
+      this.aiState.history.push({ role: 'user', content: text });
+      this.aiState.history.push({ role: 'assistant', content: '' });
+      this.saveAiState();
+      this.renderDashboardAiOutput();
+      this.updateAiControls();
+      input.val('');
+
+      try {
+        await window.AppLLM.generate(text, {
+          system: 'You are a helpful language learning coach inside a vocabulary tracker. Give practical, concise help for vocabulary study, memory, usage, and practice ideas.',
+          onToken: (token) => {
+            const last = this.aiState.history[this.aiState.history.length - 1];
+            if (last && last.role === 'assistant') {
+              last.content += token;
+              this.saveAiState();
+              this.renderDashboardAiOutput();
+            }
+          }
+        });
+      } catch (e) {
+        console.error(e);
+        this.showAiError(e.message);
+      } finally {
+        this.aiGeneratingDashboard = false;
+        this.saveAiState();
+        this.updateAiControls();
+      }
     },
 
     renderMasteryDots: function(level) {
       let html = '';
       for (let i = 1; i <= 4; i++) {
-        if (i <= level) html += `<div class="w-2 h-2 rounded-full bg-emerald-500"></div>`;
-        else html += `<div class="w-2 h-2 rounded-full bg-slate-200"></div>`;
+        if (i <= level) html += '<div class="w-2 h-2 rounded-full bg-emerald-500"></div>';
+        else html += '<div class="w-2 h-2 rounded-full bg-slate-200"></div>';
       }
       return html;
     },
 
-    // --- Vocabulary View ---
     renderVocabulary: function() {
       const words = App.Data.getWords();
       const container = $('#vocab-list');
@@ -127,7 +369,7 @@ window.App = window.App || {};
       }
 
       words.forEach((w, index) => {
-        const delayClass = `stagger-${(index % 4) + 1}`;
+        const delayClass = 'stagger-' + ((index % 4) + 1);
         container.append(`
           <div class="bg-white rounded-2xl p-4 sm:p-5 border border-slate-100 hover-card-lift animate-slide-up ${delayClass}">
             <div class="flex justify-between items-start gap-3 mb-4">
@@ -161,13 +403,23 @@ window.App = window.App || {};
       }
     },
 
-    // --- Modal Logic ---
     showAddWordModal: function() {
-      $('#form-add-word')[0].reset();
+      const formEl = $('#form-add-word')[0];
+      if (formEl && typeof formEl.reset === 'function') {
+        formEl.reset();
+      }
       $('#modal-title').text('Add New Word');
-      $('#ai-context-container').hide();
       $('#modal-overlay').removeClass('hidden').addClass('flex animate-fade-in');
-      setTimeout(() => $('#word-term').focus(), 100);
+      this.clearAiError();
+      this.updateAiControls();
+      this.setGeneratingButtonState('all', false);
+      if (window.AppLLM && window.AppLLM.ready) {
+        this.showAiProgress(100);
+        $('#ai-progress-container').addClass('hidden');
+      } else if (this.aiLoadingStarted || (window.AppLLM && window.AppLLM._loadingPromise)) {
+        this.showAiProgress(window.AppLLM && typeof window.AppLLM._lastProgress === 'number' ? window.AppLLM._lastProgress : 0);
+      }
+      setTimeout(() => $('#word-term').trigger('focus'), 100);
     },
 
     closeModal: function() {
@@ -175,73 +427,85 @@ window.App = window.App || {};
     },
 
     handleSaveWord: function() {
-      const term = $('#word-term').val().trim();
-      const translation = $('#word-translation').val().trim();
-      const context = $('#word-context').val().trim();
+      const values = this.getWordFormValues();
+      const term = values.term;
+      const translation = values.translation;
+      const context = values.context;
 
       if (!term || !translation) {
         App.Toast.show('Please fill in required fields', 'error');
         return;
       }
 
-      App.Data.addWord({ term, translation, context });
+      App.Data.addWord({ term: term, translation: translation, context: context });
       this.closeModal();
       App.Toast.show('Word added successfully');
-      
-      if (this.currentView === 'vocabulary' || this.currentView === 'dashboard') {
-        this.renderCurrentView();
-      }
+      this.renderCurrentView();
+      this.renderDashboard();
+    },
+    generateAiContext: async function() {
+      await this.generateAiAllFields();
     },
 
-    // --- AI Context Generation ---
-    generateAiContext: async function() {
-      const term = $('#word-term').val().trim();
-      if (!term) {
-        App.Toast.show('Enter a word first to generate context.', 'error');
+    generateAiAllFields: async function() {
+      const values = this.getWordFormValues();
+      const lang = values.lang;
+      const seed = values.term || values.translation || values.context;
+
+      if (!window.AppLLM || !window.AppLLM.ready) {
+        App.Toast.show('AI is still loading. Please wait a moment.', 'error');
         return;
       }
 
-      const btn = $('#btn-ai-context');
-      const ogText = btn.html();
-      btn.prop('disabled', true).html(`<svg class="animate-spin h-4 w-4 mr-2 inline" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" fill="none"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg> Initializing AI...`);
+      this.aiGeneratingContext = true;
+      this.aiGeneratingField = 'all';
+      this.updateAiControls();
+      this.setGeneratingButtonState('all', true);
 
+      $('#word-term').val('');
+      $('#word-translation').val('');
+      $('#word-context').val('');
+
+      let combined = '';
       try {
-        if (!window.AppLLM.ready) {
-          // Show progress container in modal
-          $('#ai-progress-container').removeClass('hidden');
-          await window.AppLLM.load(null, (percent) => {
-            $('#ai-progress-bar').css('width', `${percent}%`);
-            if (percent === 100) $('#ai-progress-container').addClass('hidden');
-          });
-        }
+        const prompt = seed
+          ? 'Using this idea as inspiration: ' + seed + '. Generate a vocabulary discovery entry for a learner studying ' + lang + '. Return exactly three lines in this format and nothing else:\nTERM: <word or phrase in ' + lang + '>\nTRANSLATION: <English translation>\nCONTEXT: <one short example sentence in ' + lang + '>'
+          : 'Generate a vocabulary discovery entry for a learner studying ' + lang + '. Return exactly three lines in this format and nothing else:\nTERM: <word or phrase in ' + lang + '>\nTRANSLATION: <English translation>\nCONTEXT: <one short example sentence in ' + lang + '>';
 
-        btn.html(`<svg class="animate-spin h-4 w-4 mr-2 inline" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" fill="none"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg> Generating...`);
-        $('#word-context').val('');
-        
-        const prompt = `Write a short, simple, single example sentence in the native language using the word "${term}". Do not include translations or extra text. Just the sentence.`;
-        
         await window.AppLLM.generate(prompt, {
-          system: 'You are a helpful language teacher. Keep responses to a single short sentence.',
+          system: 'You are a helpful language teacher. Follow the requested output format exactly.',
           onToken: (token) => {
-            const current = $('#word-context').val();
-            $('#word-context').val(current + token);
+            combined += token;
+            const termMatch = combined.match(/TERM:\s*([^\n]+)/i);
+            const translationMatch = combined.match(/TRANSLATION:\s*([^\n]+)/i);
+            const contextMatch = combined.match(/CONTEXT:\s*([^\n]+)/i);
+            if (termMatch) $('#word-term').val(termMatch[1].trim());
+            if (translationMatch) $('#word-translation').val(translationMatch[1].trim());
+            if (contextMatch) $('#word-context').val(contextMatch[1].trim());
           }
         });
-        App.Toast.show('Context generated!');
+
+        if (!($('#word-term').val() || '').trim() || !($('#word-translation').val() || '').trim()) {
+          throw new Error('The AI response could not be parsed into all fields. Please try again.');
+        }
+
+        $('#word-context').val((($('#word-context').val() || '') + '').trim());
+        App.Toast.show('Generated all fields successfully.');
       } catch (e) {
         console.error(e);
         App.Toast.show('AI Error: ' + e.message, 'error');
-        $('#ai-progress-container').addClass('hidden');
       } finally {
-        btn.prop('disabled', false).html(ogText);
+        this.aiGeneratingContext = false;
+        this.aiGeneratingField = null;
+        this.updateAiControls();
+        this.setGeneratingButtonState('all', false);
       }
     },
 
-    // --- Practice View ---
     renderPracticeLobby: function() {
       const container = $('#view-practice');
       const toReview = App.Data.getWordsToReview();
-      
+
       let html = `
         <div class="max-w-2xl mx-auto mt-8 sm:mt-12 text-center animate-slide-up px-2">
           <div class="w-24 h-24 bg-orange-100 text-orange-500 rounded-full flex items-center justify-center mx-auto mb-6 shadow-inner">
@@ -265,17 +529,16 @@ window.App = window.App || {};
           </button>
         `;
       }
-      html += `</div>`;
+      html += '</div>';
       container.html(html);
     },
 
     startPracticeSession: function(forceRandom) {
       this.isPracticing = true;
       this.practiceResults = [];
-      
-      let pool = forceRandom ? App.Data.getWords() : App.Data.getWordsToReview();
-      // Shuffle
-      this.practiceQueue = pool.sort(() => 0.5 - Math.random()).slice(0, 15); // Max 15 per session
+
+      const pool = forceRandom ? App.Data.getWords() : App.Data.getWordsToReview();
+      this.practiceQueue = pool.sort(() => 0.5 - Math.random()).slice(0, 15);
       this.practiceCurrentIndex = 0;
 
       if (this.practiceQueue.length === 0) {
@@ -290,7 +553,7 @@ window.App = window.App || {};
     renderPracticeCard: function() {
       const container = $('#view-practice');
       const word = this.practiceQueue[this.practiceCurrentIndex];
-      const progress = ((this.practiceCurrentIndex) / this.practiceQueue.length) * 100;
+      const progress = (this.practiceCurrentIndex / this.practiceQueue.length) * 100;
 
       container.html(`
         <div class="max-w-xl mx-auto animate-fade-in px-1 sm:px-0">
@@ -306,14 +569,12 @@ window.App = window.App || {};
 
           <div class="perspective-1000 mb-6 sm:mb-8" id="flashcard-container">
             <div id="flashcard-inner" class="relative w-full min-h-[18rem] h-[18rem] sm:h-80 transform-style-3d cursor-pointer" onclick="App.UI.flipCard()">
-              <!-- Front -->
               <div class="absolute w-full h-full backface-hidden bg-white border-2 border-slate-100 rounded-3xl shadow-sm flex flex-col items-center justify-center p-8">
                 <span class="text-sm font-bold text-slate-300 uppercase tracking-widest mb-4">${word.lang}</span>
                 <h2 class="text-3xl sm:text-5xl font-bold text-slate-800 text-center break-words">${App.Utils.escapeHtml(word.term)}</h2>
                 <p class="mt-8 text-slate-400 text-sm">Tap to reveal translation</p>
               </div>
-              
-              <!-- Back -->
+
               <div class="absolute w-full h-full backface-hidden bg-emerald-600 rounded-3xl shadow-lg flex flex-col items-center justify-center p-8 rotate-y-180">
                 <h2 class="text-3xl sm:text-4xl font-bold text-white text-center mb-6 break-words">${App.Utils.escapeHtml(word.translation)}</h2>
                 ${word.context ? `<p class="text-emerald-100 text-center italic">"${App.Utils.escapeHtml(word.context)}"</p>` : ''}
@@ -336,7 +597,6 @@ window.App = window.App || {};
     flipCard: function() {
       $('#flashcard-inner').toggleClass('rotate-y-180');
       $('#practice-controls').removeClass('opacity-0 pointer-events-none');
-      // Remove click handler from card once flipped to avoid weird interactions
       $('#flashcard-inner').prop('onclick', null).off('click');
     },
 
@@ -375,7 +635,7 @@ window.App = window.App || {};
           </div>
           <h2 class="text-2xl sm:text-3xl font-bold text-slate-800 mb-2">Great Session!</h2>
           <p class="text-slate-500 mb-8">You reviewed ${this.practiceResults.length} words.</p>
-          
+
           <div class="grid grid-cols-2 gap-4 mb-8">
             <div class="bg-slate-50 p-4 rounded-2xl">
               <div class="text-3xl font-bold text-slate-800 mb-1">${accuracy}%</div>
@@ -394,21 +654,18 @@ window.App = window.App || {};
       `);
     },
 
-    // --- Insights View ---
     renderInsights: function() {
       const container = $('#view-insights');
       const streak = App.Data.state.streak;
       const heatmapData = App.Data.getHeatmapData();
 
       let heatmapHtml = '';
-      // Simple CSS grid for heatmap. 60 days approx 8.5 weeks. We'll do a simple wrap flex
       heatmapData.forEach(day => {
         heatmapHtml += `<div class="heatmap-cell" data-level="${day.level}" title="${day.date}: ${day.count} words"></div>`;
       });
 
       container.html(`
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6 animate-slide-up">
-          <!-- Streak Card -->
           <div class="bg-gradient-to-br from-orange-500 to-red-500 rounded-3xl p-6 sm:p-8 text-white shadow-lg relative overflow-hidden">
             <div class="relative z-10">
               <div class="flex items-center space-x-3 mb-8">
@@ -423,12 +680,10 @@ window.App = window.App || {};
               </div>
               <p class="mt-4 text-orange-100 font-medium">Longest streak: ${streak.longest} days</p>
             </div>
-            <!-- Decorative bg elements -->
             <div class="absolute -bottom-10 -right-10 w-48 h-48 bg-white opacity-10 rounded-full blur-2xl"></div>
             <div class="absolute top-10 right-10 w-24 h-24 bg-yellow-300 opacity-20 rounded-full blur-xl"></div>
           </div>
 
-          <!-- Stats Card -->
           <div class="bg-white rounded-3xl p-6 sm:p-8 border border-slate-100 shadow-sm">
             <h3 class="text-xl font-bold text-slate-800 mb-6">Overall Progress</h3>
             <div class="space-y-6">
@@ -444,16 +699,15 @@ window.App = window.App || {};
               <div>
                 <div class="flex justify-between text-sm mb-2">
                   <span class="text-slate-500 font-medium">Mastered Words (Level 4)</span>
-                  <span class="font-bold text-slate-800">${App.Data.state.words.filter(w=>w.level===4).length}</span>
+                  <span class="font-bold text-slate-800">${App.Data.state.words.filter(w => w.level === 4).length}</span>
                 </div>
                 <div class="w-full h-2 bg-slate-100 rounded-full overflow-hidden">
-                  <div class="h-full bg-blue-500" style="width: ${App.Data.state.words.length ? (App.Data.state.words.filter(w=>w.level===4).length / App.Data.state.words.length)*100 : 0}%"></div>
+                  <div class="h-full bg-blue-500" style="width: ${App.Data.state.words.length ? (App.Data.state.words.filter(w => w.level === 4).length / App.Data.state.words.length) * 100 : 0}%"></div>
                 </div>
               </div>
             </div>
           </div>
 
-          <!-- Heatmap Card -->
           <div class="col-span-1 md:col-span-2 bg-white rounded-3xl p-5 sm:p-8 border border-slate-100 shadow-sm">
             <h3 class="text-xl font-bold text-slate-800 mb-2">Activity Heatmap</h3>
             <p class="text-slate-500 text-sm mb-6">Your practice history over the last 60 days</p>

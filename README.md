@@ -6,7 +6,7 @@ Built by [Teda.dev](https://teda.dev), the AI app builder for everyday problems,
 - **Vocabulary Management:** Add, edit, and organize vocabulary across multiple languages.
 - **Smart Practice Sessions:** Test your knowledge with built-in review sessions.
 - **Deep Insights:** Track your daily activity with visual heatmaps and streak calculations.
-- **AI Context Generation:** (Optional) Use local AI to generate example sentences for new vocabulary, running entirely in your browser.
+- **AI Context Generation & Study Coach:** Use local, browser-based AI powered by WebLLM to generate example sentences and get interactive vocabulary help without sending data to a server.
 - **Fully Local & Private:** All data is securely stored in your browser's LocalStorage.
 
 ## Technical Stack
@@ -17,3 +17,5 @@ Built by [Teda.dev](https://teda.dev), the AI app builder for everyday problems,
 
 ## Setup
 No build step required. Simply open `index.html` in a modern web browser (Chrome/Edge 113+ or Firefox 118+ recommended for WebGPU support if using AI features).
+
+> Note: For browser performance and compatibility, the app uses the default WebLLM model `Qwen2.5-1.5B-Instruct-q4f16_1-MLC`. Very large models such as 35B-class variants are not used as defaults because they exceed practical in-browser limits.
